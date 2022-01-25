@@ -34,7 +34,7 @@ class Blockchain {
      * Passing as a data `{data: 'Genesis Block'}`
      */
     async initializeChain() {
-        if( this.height === -1){
+        if(this.height === -1){
             let block = new BlockClass.Block({data: 'Genesis Block'});
             await this._addBlock(block);
         }
@@ -114,7 +114,8 @@ class Blockchain {
      */
     requestMessageOwnershipVerification(address) {
         return new Promise((resolve) => {
-            
+            let unsignedMessage = `${address}:${new Date().getTime().toString().slice(0,-3)}:starRegistry`;
+            resolve(unsignedMessage);
         });
     }
 
@@ -138,7 +139,24 @@ class Blockchain {
     submitStar(address, message, signature, star) {
         let self = this;
         return new Promise(async (resolve, reject) => {
-            
+            // 1 Get the time from the message sent as a parameter example: parseInt(message.split(':')[1])
+            let messageTime = parseInt(message.split(':')[1]);
+            // 2 Get the current time: let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+            let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+            // 3 Check if the time elapsed is less than 5 minutes (compare the time in the message and currentTime)
+            if ((currentTime - messageTime) > 300) {
+                reject(new Error('submitStar: more than five minutes have elapsed'))
+            }
+            // 4 Verify the message with wallet address and signature: bitcoinMessage.verify(message, address, signature)
+            if (!bitcoinMessage.verify(message, address, signature)) {
+                reject(new Error('Invalid message.'));
+            }
+            // 5 Create the block and add it to the chain
+            let data = {address: address, message: message, signature: signature, star: star};
+            let block = new BlockClass.Block(data);
+            // 6 Resolve with the block added.
+            await this._addBlock(block);
+            resolve(block);
         });
     }
 
@@ -151,7 +169,7 @@ class Blockchain {
     getBlockByHash(hash) {
         let self = this;
         return new Promise((resolve, reject) => {
-           
+            resolve(self.chain.find(block => block.hash === hash));
         });
     }
 
@@ -182,7 +200,12 @@ class Blockchain {
         let self = this;
         let stars = [];
         return new Promise((resolve, reject) => {
-            
+            let ownedBlocks = self.chain.filter(block => block.owner === address);
+            if (ownedBlocks.length === 0) {
+                reject(new Error('Address not found.'))
+            };
+            stars = ownedBlocks.map(block => JSON.parse(hex2ascii(block.body)));
+            stars ? resolve(stars) : reject(new Error('Failed to return stars.'));
         });
     }
 
@@ -196,7 +219,21 @@ class Blockchain {
         let self = this;
         let errorLog = [];
         return new Promise(async (resolve, reject) => {
-            
+            for (let block of self.chain) {
+                // validate each block using validate() method from each of the blocks in the chain.
+                if (await block.validate()) {
+                    if (block.height > 0) { // skip genesis block
+                        let prevBlock = self.chain.filter(b => b.height === block.height - 1)[0];
+                        // Each Block should check the with the previousBlockHash to make sure the chain isn't broken.
+                        if (block.previousBlockHash !== prevBlock.hash) {
+                            errorLog.push(new Error(`Invalid link: Block #${block.height} not linked to the hash of block #${block.height - 1}.`));
+                        }
+                    }
+                } else {
+                    errorLog.push(new Error(`Invalid block #${block.height}: ${block.hash}`))
+                }
+            }
+            resolve(errorLog);
         });
     }
 

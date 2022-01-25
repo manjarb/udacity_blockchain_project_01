@@ -37,19 +37,19 @@ class Block {
      */
     validate() {
         let self = this;
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             // Save in auxiliary variable the current block hash
-            const auxiliaryHash = self.hash                            
+            const auxiliaryHash = self.hash;                   
             // Recalculate the hash of the Block
-            const reCalHash = SHA256(JSON.stringify(self)).toString();
+            const reCalHash = await SHA256(JSON.stringify({...self, hash: null})).toString();
             // Comparing if the hashes changed
             if (auxiliaryHash !== reCalHash) {
                 // Returning the Block is not valid
-                console.log('Invalid block hash: ' + auxHash + ' != ' + calcHash);
+                console.log('Invalid block hash: ' + auxiliaryHash + ' != ' + reCalHash);
                 resolve(false);
             }
             // Returning the Block is valid
-            return true;
+            resolve(true);
         });
     }
 
